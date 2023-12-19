@@ -1,0 +1,33 @@
+{
+  "name": "youchain",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "hh compile",
+    "test": "hh test",
+    "dev": "hh node",
+    "deploy:testnet": "hh --network bitkub_testnet ignition deploy ignition/modules/Atomic.ts",
+    "deploy:sol": "hh --network localhost_0 ignition deploy ignition/modules/Atomic.ts",
+    "wipe:testnet": "hh --network bitkub_testnet ignition wipe chain-25925 Atomic#Atomic",
+    "wipe:sol": "hh --network localhost_0 ignition wipe chain-31337 Atomic#Atomic",
+    "redeploy:testnet": "npm run wipe:testnet && npm run deploy:testnet",
+    "redeploy:sol": "npm run wipe:sol && npm run deploy:sol"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ignition-ethers": "^0.13.0",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "concurrently": "^8.2.2",
+    "hardhat": "^2.19.2"
+  },
+  "dependencies": {
+    "@bitkub-blockchain/sdk-client-js": "^0.0.5",
+    "@openzeppelin/contracts": "^5.0.1",
+    "@poanet/solidity-flattener": "^3.0.9",
+    "get-video-duration": "^4.1.0",
+    "solc": "^0.8.23-fixed"
+  }
+}
