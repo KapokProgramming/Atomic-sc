@@ -21,12 +21,20 @@ const config: HardhatUserConfig = {
 	networks: {
 		bitkub_mainnet: {
 			url: `https://rpc.bitkubchain.io`,
-			accounts: [process.env.WALLET_PK ? process.env.WALLET_PK : "0x0000000000000000000000000000000000000000000000000000000000000000"],
+			accounts: [
+				process.env.WALLET_PK
+					? process.env.WALLET_PK
+					: "0x0000000000000000000000000000000000000000000000000000000000000000",
+			],
 			gasPrice: "auto",
 		},
 		bitkub_testnet: {
 			url: `https://rpc-testnet.bitkubchain.io`,
-			accounts: [process.env.WALLET_PK ? process.env.WALLET_PK : "0x0000000000000000000000000000000000000000000000000000000000000000"],
+			accounts: [
+				process.env.WALLET_PK
+					? process.env.WALLET_PK
+					: "0x0000000000000000000000000000000000000000000000000000000000000000",
+			],
 			gasPrice: "auto",
 		},
 	},
@@ -44,6 +52,9 @@ const config: HardhatUserConfig = {
 				},
 			},
 		],
+	},
+	sourcify: {
+		enabled: false,
 	},
 };
 

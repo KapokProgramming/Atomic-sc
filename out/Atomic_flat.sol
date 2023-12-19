@@ -3,6 +3,15 @@
 pragma solidity ^0.8.20;
 
 contract Atomic {
+    struct VideoAdd {
+        string _title;
+        string _description;
+        string _url;
+        string _thumb_url;
+        uint _duration;
+        string[] _keywords;
+    }
+
     struct Video {
         uint id;
         string title;
@@ -12,6 +21,11 @@ contract Atomic {
         string[] keywords;
         uint duration;
         uint timestamp;
+    }
+
+    struct VideoWithNearID {
+        Video video;
+        string near_id;
     }
 
     struct Comment {
@@ -35,10 +49,12 @@ contract Atomic {
         internal near_reverse_idx_validation;
 
     // TX: addVideo, deleteVideo, adminDeleteVideo
-    // VW: getUserVideosByNearID, getLatestVideos, getVideo
+    // VW: getUserVideosByNearID, getLatestVideos, getVideo, getVideosByTerm
     mapping(address => uint[]) internal user_videos;
     mapping(uint => address) internal video_owner;
     mapping(uint => Video) internal video_data;
+    mapping(string => uint[]) internal term_video_idx;
+    mapping(string => mapping(uint => bool)) internal term_video_idx_validation;
 
     // TX: addComment
     // VW: getComment
@@ -88,35 +104,48 @@ contract Atomic {
     }
 
     function addVideo(
-        string calldata _title,
-        string calldata _description,
-        string calldata _url,
-        string calldata _thumb_url,
-        uint _duration,
-        string[] calldata _keywords
+        VideoAdd calldata _video_add,
+        uint[] calldata _attributions,
+        string calldata _near_id
     ) public {
         uint video_id = video_counter++;
         video_data[video_id] = Video({
             id: video_id,
-            title: _title,
-            description: _description,
-            keywords: _keywords,
-            url: _url,
-            thumb_url: _thumb_url,
-            duration: _duration,
+            title: _video_add._title,
+            description: _video_add._description,
+            keywords: _video_add._keywords,
+            url: _video_add._url,
+            thumb_url: _video_add._thumb_url,
+            duration: _video_add._duration,
             timestamp: block.timestamp
         });
         video_owner[video_id] = msg.sender;
         user_videos[msg.sender].push(video_id);
+        addTags(video_id, _video_add._keywords);
+        if (_attributions.length > 0) {
+            setAttributions(video_id, _attributions);
+        }
+        if (bytes(_near_id).length != 0) {
+            _set_near_id(msg.sender, _near_id);
+        }
     }
 
-    function deleteVideo(uint video_id) public {
-        require(video_owner[video_id] != address(0), "Video must exist.");
+    function addTags(uint _video_id, string[] calldata _keywords) internal {
+        for (uint i = 0; i < _keywords.length; i++) {
+            if (!term_video_idx_validation[_keywords[i]][_video_id]) {
+                term_video_idx[_keywords[i]].push(_video_id);
+                term_video_idx_validation[_keywords[i]][_video_id] = true;
+            }
+        }
+    }
+
+    function deleteVideo(uint _video_id) public {
+        require(video_owner[_video_id] != address(0), "Video must exist.");
         require(
-            video_owner[video_id] == msg.sender,
+            video_owner[_video_id] == msg.sender,
             "You do not own the video."
         );
-        _delete_video(video_id);
+        _delete_video(_video_id);
     }
 
     function adminDeleteVideo(uint video_id) public onlyAdmin {
@@ -138,15 +167,46 @@ contract Atomic {
         });
     }
 
-    function getVideo(uint video_id) public view returns (Video memory) {
+    function _to_video_with_near_id(
+        Video memory _video
+    ) internal view returns (VideoWithNearID memory) {
+        return
+            VideoWithNearID({
+                video: _video,
+                near_id: user_near_id[video_owner[_video.id]]
+            });
+    }
+
+    function getVideo(
+        uint video_id
+    ) public view returns (VideoWithNearID memory) {
         require(video_owner[video_id] != address(0), "Video must exist.");
-        return video_data[video_id];
+        return _to_video_with_near_id(video_data[video_id]);
+    }
+
+    function getVideosByTerm(
+        string[] memory terms
+    ) public view returns (VideoWithNearID[] memory) {
+        uint len = 0;
+        for (uint i = 0; i < terms.length; i++) {
+            len += term_video_idx[terms[i]].length;
+        }
+        VideoWithNearID[] memory videos = new VideoWithNearID[](len);
+        uint count = 0;
+        for (uint i = 0; i < terms.length; i++) {
+            for (uint ii = 0; ii < term_video_idx[terms[i]].length; ii++) {
+                videos[count++] = _to_video_with_near_id(
+                    video_data[term_video_idx[terms[i]][ii]]
+                );
+            }
+        }
+        return videos;
     }
 
     function setAttributions(
         uint video_id,
-        uint[] calldata attributions
-    ) public {
+        uint[] memory attributions
+    ) internal {
         require(
             video_owner[video_id] == msg.sender,
             "You do not own the video."
@@ -209,21 +269,25 @@ contract Atomic {
     }
 
     function setNearID(string calldata _near_id) public {
-        user_near_id[msg.sender] = _near_id;
-        if (!near_reverse_idx_validation[_near_id][msg.sender]) {
-            near_reverse_idx[_near_id].push(msg.sender);
-            near_reverse_idx_validation[_near_id][msg.sender] = true;
+        _set_near_id(msg.sender, _near_id);
+    }
+
+    function _set_near_id(address _addr, string memory _near_id) internal {
+        user_near_id[_addr] = _near_id;
+        if (!near_reverse_idx_validation[_near_id][_addr]) {
+            near_reverse_idx[_near_id].push(_addr);
+            near_reverse_idx_validation[_near_id][_addr] = true;
         }
     }
 
     function getVideoByNearID(
         string memory _near_id
-    ) public view returns (Video[] memory) {
+    ) public view returns (VideoWithNearID[] memory) {
         uint len = 0;
         for (uint i = 0; i < near_reverse_idx[_near_id].length; i++) {
             len += user_videos[near_reverse_idx[_near_id][i]].length;
         }
-        Video[] memory videos = new Video[](len);
+        VideoWithNearID[] memory videos = new VideoWithNearID[](len);
         uint count = 0;
         for (uint i = 0; i < near_reverse_idx[_near_id].length; i++) {
             for (
@@ -231,20 +295,24 @@ contract Atomic {
                 ii < user_videos[near_reverse_idx[_near_id][i]].length;
                 ii++
             ) {
-                videos[count++] = video_data[
-                    user_videos[near_reverse_idx[_near_id][i]][ii]
-                ];
+                videos[count++] = _to_video_with_near_id(
+                    video_data[user_videos[near_reverse_idx[_near_id][i]][ii]]
+                );
             }
         }
         return videos;
     }
 
-    function getLatestVideos(uint size) public view returns (Video[] memory) {
-        Video[] memory videos = new Video[](
-            video_counter > size ? size : video_counter
+    function getLatestVideos(
+        uint size
+    ) public view returns (VideoWithNearID[] memory) {
+        VideoWithNearID[] memory videos = new VideoWithNearID[](
+            video_counter - 1 > size ? size : video_counter - 1
         );
         for (uint i = 0; i < videos.length; i++) {
-            videos[i] = video_data[video_counter - i - 1];
+            videos[i] = _to_video_with_near_id(
+                video_data[video_counter - i - 1]
+            );
         }
         return videos;
     }
